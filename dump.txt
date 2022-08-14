@@ -1,1 +1,0 @@
-Usage: minigrep pattern file
