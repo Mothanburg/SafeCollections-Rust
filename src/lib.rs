@@ -1,19 +1,19 @@
 use std::{
-    cell::RefCell,
-    rc::{Rc, Weak},
+    fmt::Display,
+    sync::{Arc, Mutex, Weak},
 };
 
 #[derive(Debug)]
 struct Node<T> {
     item: T,
-    prev: RefCell<Weak<Node<T>>>,
-    next: RefCell<Option<Rc<Node<T>>>>,
+    prev: Mutex<Weak<Node<T>>>,
+    next: Mutex<Option<Arc<Node<T>>>>,
 }
 
 #[derive(Debug)]
 pub struct LinkedList<T> {
-    head: Option<Rc<Node<T>>>,
-    tail: Option<Rc<Node<T>>>,
+    head: Option<Arc<Node<T>>>,
+    tail: Option<Arc<Node<T>>>,
     size: u32,
 }
 
@@ -36,23 +36,23 @@ impl<T> LinkedList<T> {
 
     pub fn push_head(&mut self, item: T) {
         if self.size == 0 {
-            let new_node = Rc::new(Node {
+            let new_node = Arc::new(Node {
                 item,
-                prev: RefCell::new(Weak::new()),
-                next: RefCell::new(None),
+                prev: Mutex::new(Weak::new()),
+                next: Mutex::new(None),
             });
-            self.tail = Some(Rc::clone(&new_node));
-            self.head = Some(Rc::clone(&new_node));
+            self.tail = Some(Arc::clone(&new_node));
+            self.head = Some(Arc::clone(&new_node));
             self.size += 1;
             return;
         }
 
-        let new_node = Rc::new(Node {
+        let new_node = Arc::new(Node {
             item,
-            prev: RefCell::new(Weak::new()),
-            next: RefCell::new(Some(Rc::clone(&self.head.as_ref().unwrap()))),
+            prev: Mutex::new(Weak::new()),
+            next: Mutex::new(Some(Arc::clone(&self.head.as_ref().unwrap()))),
         });
-        *self.head.as_ref().unwrap().prev.borrow_mut() = Rc::downgrade(&new_node);
+        *self.head.as_ref().unwrap().prev.lock().unwrap() = Arc::downgrade(&new_node);
         self.head = Some(new_node);
         self.size += 1;
     }
@@ -62,8 +62,8 @@ impl<T> LinkedList<T> {
             panic!("");
         }
 
-        if let Some(node) = &*self.head.clone().as_ref().unwrap().next.borrow() {
-            self.head = Some(Rc::clone(node));
+        if let Some(node) = &*self.head.clone().as_ref().unwrap().next.lock().unwrap() {
+            self.head = Some(Arc::clone(node));
             self.size -= 1;
         } else {
             self.head = None;
@@ -82,24 +82,24 @@ impl<T> LinkedList<T> {
 
     pub fn push_back(&mut self, item: T) {
         if self.size == 0 {
-            let new_node = Rc::new(Node {
+            let new_node = Arc::new(Node {
                 item,
-                prev: RefCell::new(Weak::new()),
-                next: RefCell::new(None),
+                prev: Mutex::new(Weak::new()),
+                next: Mutex::new(None),
             });
-            self.tail = Some(Rc::clone(&new_node));
-            self.head = Some(Rc::clone(&new_node));
+            self.tail = Some(Arc::clone(&new_node));
+            self.head = Some(Arc::clone(&new_node));
             self.size += 1;
             return;
         }
 
-        let new_node = Rc::new(Node {
+        let new_node = Arc::new(Node {
             item,
-            prev: RefCell::new(Rc::downgrade(&self.tail.as_ref().unwrap())),
-            next: RefCell::new(None),
+            prev: Mutex::new(Arc::downgrade(&self.tail.as_ref().unwrap())),
+            next: Mutex::new(None),
         });
 
-        *self.tail.as_ref().unwrap().next.borrow_mut() = Some(Rc::clone(&new_node));
+        *self.tail.as_ref().unwrap().next.lock().unwrap() = Some(Arc::clone(&new_node));
         self.tail = Some(new_node);
         self.size += 1;
     }
@@ -109,14 +109,37 @@ impl<T> LinkedList<T> {
             panic!("");
         }
 
-        if let Some(node) = self.tail.clone().unwrap().prev.borrow().upgrade() {
-            *node.next.borrow_mut() = None;
+        if let Some(node) = self.tail.clone().unwrap().prev.lock().unwrap().upgrade() {
+            *node.next.lock().unwrap() = None;
             self.tail = Some(node);
             self.size -= 1;
         } else {
             self.head = None;
             self.tail = None;
             self.size -= 1;
+        }
+    }
+}
+
+impl<T: Display> Display for LinkedList<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.size == 0 {
+            write!(f, "[]")
+        } else {
+            let mut s = String::new();
+            let mut cur = Some(Arc::clone(&self.head.as_ref().unwrap()));
+            loop {
+                let next = cur.as_ref().unwrap().next.lock().unwrap().clone();
+                if let None = &next {
+                    s += format!("{}", &cur.as_ref().unwrap().item).as_str();
+                    break;
+                }
+                else {
+                    s += format!("{}, ", &cur.as_ref().unwrap().item).as_str();
+                }
+                cur = next;
+            }
+            write!(f, "[{}]", s)
         }
     }
 }
