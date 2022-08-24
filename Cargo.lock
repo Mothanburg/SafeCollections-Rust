@@ -144,6 +144,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4501abdff3ae82a1c1b477a17252eb69cee9e66eb915c1abaa4f44d873df9f09"
 
 [[package]]
+name = "safe_collections_bin"
+version = "0.1.0"
+dependencies = [
+ "csv",
+ "rand",
+ "serde",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.144"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -172,15 +181,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "tiny_webserver"
-version = "0.1.0"
-dependencies = [
- "csv",
- "rand",
- "serde",
 ]
 
 [[package]]
