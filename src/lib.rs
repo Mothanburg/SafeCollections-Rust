@@ -1,4 +1,6 @@
-pub mod safe_collections;
+pub mod safe_list;
+
+pub use safe_list::SafeList;
 
 #[cfg(test)]
 mod list_tests {
@@ -8,7 +10,7 @@ mod list_tests {
         thread, vec,
     };
 
-    use super::safe_collections::SafeList;
+    use super::SafeList;
 
     #[test]
     fn test_push_and_pop() {

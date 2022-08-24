@@ -2,7 +2,7 @@ use rand::Rng;
 use serde::Serialize;
 use std::collections::LinkedList;
 use std::time::SystemTime;
-use safe_collections_bin::safe_collections::SafeList;
+use safe_collections::SafeList;
 
 #[derive(Serialize)]
 struct BenchRecord {
