@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex, Weak},
 };
 
+// 为了把节点中的元素移动出来，需要使用一个包装类型
 type MovBox<T> = Option<T>;
 
 #[derive(Debug)]
@@ -29,14 +30,20 @@ pub struct Iter<'a, T> {
     marker: PhantomData<&'a Node<T>>,
 }
 
-// into 迭代器
+// mut 迭代器需要使用暂时不稳定的特性
+#[derive(Debug)]
+pub struct IterMut<'a, T> {
+    head: Option<Arc<Node<T>>>,
+    back: Option<Arc<Node<T>>>,
+    len: usize,
+    marker: PhantomData<&'a mut Node<T>>,
+}
+
 #[derive(Clone, Debug)]
 pub struct IntoIter<T> {
     safe_list: SafeList<T>,
 }
 
-
-// 实现链表
 impl<T> SafeList<T> {
     #[inline]
     pub fn new() -> SafeList<T> {
@@ -67,6 +74,7 @@ impl<T> SafeList<T> {
         }
     }
 
+    #[inline]
     pub fn front(&self) -> Option<&T> {
         self.head
             .as_ref()
@@ -125,6 +133,7 @@ impl<T> SafeList<T> {
         })
     }
 
+    #[inline]
     pub fn back(&self) -> Option<&T> {
         self.back
             .as_ref()
@@ -174,6 +183,7 @@ impl<T> SafeList<T> {
         })
     }
 
+    #[inline]
     pub fn clear(&mut self) {
         *self = SafeList::new();
     }
@@ -191,6 +201,7 @@ impl<T> SafeList<T> {
         }
     }
 
+    #[inline]
     pub fn iter(&self) -> Iter<'_, T> {
         Iter {
             head: self.head.clone(),
@@ -200,12 +211,16 @@ impl<T> SafeList<T> {
         }
     }
 
-    // 无法实现
-    // pub fn iter_mut(&mut self) -> IterMut<'_, T> {
-
-    // }
+    #[inline]
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+        IterMut {
+            head: self.head.clone(),
+            back: self.back.clone(),
+            len: self.len,
+            marker: PhantomData {},
+        }
+    }
 }
-
 
 // iter的实现只能是unsafe的，想不到办法
 impl<'a, T> Iterator for Iter<'a, T> {
@@ -263,6 +278,56 @@ impl<T> ExactSizeIterator for Iter<'_, T> {}
 
 impl<T> FusedIterator for Iter<'_, T> {}
 
+// mut迭代器也需要unsafe，直接操作指针
+impl<'a, T> Iterator for IterMut<'a, T> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<&'a mut T> {
+        if self.len == 0 {
+            None
+        } else {
+            self.head.take().map(|head| unsafe {
+                self.head = head.next.lock().unwrap().clone();
+                if let None = self.head {
+                    self.back = None;
+                }
+                self.len -= 1;
+
+                let pnode = Arc::into_raw(head);
+                Arc::decrement_strong_count(pnode);
+                (*pnode.cast_mut()).element.as_mut().unwrap()
+            })
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
+    }
+
+    fn last(mut self) -> Option<&'a mut T> {
+        self.next_back()
+    }
+}
+
+impl<'a, T> DoubleEndedIterator for IterMut<'a, T> {
+    fn next_back(&mut self) -> Option<&'a mut T> {
+        if self.len == 0 {
+            None
+        } else {
+            self.back.take().map(|back| unsafe {
+                self.back = back.prev.lock().unwrap().upgrade();
+                if let None = self.back {
+                    self.head = None;
+                }
+                self.len -= 1;
+
+                let pnode = Arc::into_raw(back);
+                Arc::decrement_strong_count(pnode);
+                (*pnode.cast_mut()).element.as_mut().unwrap()
+            })
+        }
+    }
+}
 
 impl<T> Iterator for IntoIter<T> {
     type Item = T;
@@ -282,14 +347,14 @@ impl<T> ExactSizeIterator for IntoIter<T> {}
 
 impl<T> FusedIterator for IntoIter<T> {}
 
-// clone trait实现
+// 实现Clone trait
 impl<T: Clone> Clone for SafeList<T> {
     fn clone(&self) -> Self {
         self.iter().cloned().collect()
     }
 }
 
-// into iterator实现
+// 实现IntoIterator trait
 impl<T> IntoIterator for SafeList<T> {
     type Item = T;
 
@@ -300,6 +365,7 @@ impl<T> IntoIterator for SafeList<T> {
     }
 }
 
+// 为不可变引用实现IntoIterator trait
 impl<'a, T> IntoIterator for &'a SafeList<T> {
     type Item = &'a T;
 
@@ -310,6 +376,18 @@ impl<'a, T> IntoIterator for &'a SafeList<T> {
     }
 }
 
+// 为可变引用实现IntoIterator trait
+impl<'a, T> IntoIterator for &'a mut SafeList<T> {
+    type Item = &'a mut T;
+
+    type IntoIter = IterMut<'a, T>;
+
+    fn into_iter(self) -> IterMut<'a, T> {
+        self.iter_mut()
+    }
+}
+
+// 实现Extend trait
 impl<T> Extend<T> for SafeList<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for elt in iter {
@@ -318,6 +396,7 @@ impl<T> Extend<T> for SafeList<T> {
     }
 }
 
+// 实现FromIterator trait
 impl<T> FromIterator<T> for SafeList<T> {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let mut list = SafeList::new();

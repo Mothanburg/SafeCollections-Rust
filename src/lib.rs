@@ -41,13 +41,18 @@ mod list_tests {
         for i in 1..=100 {
             list.push_back(i);
         }
+
         let mut iter1 = list.iter();
         for i in 1..=100 {
             assert_eq!(i, *iter1.next().unwrap());
         }
         assert_eq!(None, iter1.next());
+
+        for i in list.iter_mut() {
+            *i += 1;
+        }
         for (i, j) in list.into_iter().zip(1..=100) {
-            assert_eq!(i, j);
+            assert_eq!(i, j + 1);
         }
     }
 
